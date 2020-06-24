@@ -1,0 +1,99 @@
+!git clone https://github.com/AlexeyAB/darknet.git
+!nvidia-smi
+
+
+!cd darknet && make -j $(nproc)
+
+
+!cd darknet && wget https://pjreddie.com/media/files/yolov3-tiny.weights && \
+ ./darknet detect cfg/yolov3-tiny.cfg yolov3-tiny.weights data/dog.jpg
+ 
+ 
+!wget http://host.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar
+!tar -xf VOCtrainval_11-May-2012.tar
+!rm VOCtrainval_11-May-2012.tar
+
+
+!git clone https://github.com/ssaru/convert2Yolo.git
+!cd convert2Yolo && pip3 install -r requirements.txt
+
+
+aeroplane
+bicycle
+bird
+boat
+bottle
+bus
+car
+cat
+chair
+cow
+diningtable
+dog
+horse
+motorbike
+person
+pottedplant
+sheep
+sofa
+train
+tvmonitor
+
+
+!mkdir VOCdevkit/VOC2012/labels
+!cd convert2Yolo && python3 example.py --datasets VOC \
+--img_path ../VOCdevkit/VOC2012/JPEGImages/ \
+--label ../VOCdevkit/VOC2012/Annotations/ \
+--convert_output_path ../VOCdevkit/VOC2012/labels/ \
+--img_type ".jpg" \
+--manipast_path ../ \
+--cls_list_file ../vocnames.txt
+
+
+# 초기 weight 파일 준비
+# yolov4를 훈련하는 경우 다운받을 pre-trained weights
+!mkdir backup && cd backup && wget https://github.com/AlexeyAB/darknet/releases/download/darknet_yolo_v3_optimal/yolov4.conv.137
+
+# yolov3-tiny-prn을 훈련하는 경우 다운받을 ptr-trained weights
+https://drive.google.com/file/d/18v36esoXCh-PsOKwyP2GWrpYDptDY8Zf/view
+
+# 훈련용 Dataset 정보 및 test와 demo를 위한 label 정보를 확인하는 파일
+# Class 수 정의
+classes = 20
+# 훈련을 위한 이미지들의 경로, annotation file은 이미지와 같은 이름으로 ../labels 에 저장
+# Images/이미지들
+# labels/이미지와 같은 이름의 annotation files
+train = /content/manifast.txt
+# 테스트를 위한 이미지들의 경로는 생략 가능, 형태는 train_images.txt와 같음
+# 클래스에 따른 실제 클래스 명이 저장된 파일의 경로
+names = /content/vocnames.txt
+# 훈련 중 weights 파일이 저장되는 경로
+backup = /content/backup
+
+
+!cp ./darknet/cfg/yolov4.cfg yolov4-voc.txt
+
+# 메모리 관리를 위해 batch = 4, subdivision = 2로 수정
+# 입력 이미지 크기 416 x 416으로 수정
+# 클래스 수가 20이므로, 이에 맞춰서 yolo 레이어와 그 직전 convolutional 레이어를 아래와 같이 수정
+
+[convolutional]
+…
+filters=255 -> ( 5 + 20 ) * 3 = 75로 수정
+activation=linear
+[yolo]
+…
+classes=80 -> 20으로 수정
+…
+
+
+!cd darknet && ./darknet detector train ../vocdata.txt ../yolov4-voc.txt ../backup/yolov4.conv.137 -dont_show 
+
+# 학습이 진행되면서 계속해서 터미널 출력이 발생함
+# 방치하면 메모리 오류로 인해 브라우저가 종료될 수 있음
+# 주기적으로 터미널 출력을 지워야만 함
+
+# 필요시 마지막 저장된 parameter를 활용하여 다시 훈련 시작
+!cd darknet && ./darknet detector train ../vocdata.txt ../yolov4-voc.txt ../backup/yolov4-voc_last.weights -dont_show 
+
+
